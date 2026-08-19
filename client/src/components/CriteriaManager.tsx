@@ -1,0 +1,40 @@
+import { useEffect, useRef, useState } from "react";
+import { Pencil, Eraser, GripVertical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+
+function MiniSignature({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = ref.current; if (!canvas) return;
+    const context = canvas.getContext("2d"); if (!context) return;
+    const rect = canvas.getBoundingClientRect(); const x = (event.clientX - rect.left) * canvas.width / rect.width; const y = (event.clientY - rect.top) * canvas.height / rect.height;
+    if (!drawing.current) { context.beginPath(); context.moveTo(x, y); } else { context.lineTo(x, y); context.stroke(); }
+    drawing.current = true; onChange(canvas.toDataURL("image/png"));
+  };
+  const clear = () => { const canvas = ref.current; const context = canvas?.getContext("2d"); if (canvas && context) { context.clearRect(0, 0, canvas.width, canvas.height); onChange(null); } };
+  useEffect(() => { const context = ref.current?.getContext("2d"); if (context) { context.strokeStyle = "#19352a"; context.lineWidth = 2; context.lineCap = "round"; } }, []);
+  return <div><div className="relative overflow-hidden rounded-xl border border-dashed border-[#b8cdbd] bg-white"><canvas ref={ref} width={520} height={130} className="h-24 w-full touch-none" onPointerDown={draw} onPointerMove={draw} onPointerUp={() => { drawing.current = false; }} onPointerLeave={() => { drawing.current = false; }} aria-label="Signature de l’action sur le critère" />{!value && <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-[#9aab9f]">Signez ici</span>}</div><button type="button" onClick={clear} className="mt-1 inline-flex items-center gap-1 text-[11px] text-[#718579]"><Eraser size={12} /> Effacer</button></div>;
+}
+
+export default function CriteriaManager() {
+  const query = trpc.criteria.manageList.useQuery();
+  const utils = trpc.useUtils();
+  const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const reset = () => { setName(""); setEditingId(null); setSignature(null); };
+  const refresh = () => { query.refetch(); utils.inspections.dashboard.invalidate(); };
+  const create = trpc.criteria.create.useMutation({ onSuccess: () => { toast.success("Critère ajouté"); refresh(); reset(); }, onError: error => toast.error(error.message) });
+  const update = trpc.criteria.update.useMutation({ onSuccess: () => { toast.success("Critère modifié"); refresh(); reset(); }, onError: error => toast.error(error.message) });
+  const setActive = trpc.criteria.setActive.useMutation({ onSuccess: () => { toast.success("Critère mis à jour"); refresh(); }, onError: error => toast.error(error.message) });
+  const reorder = trpc.criteria.reorder.useMutation({ onSuccess: () => { toast.success("Ordre enregistré"); refresh(); }, onError: error => toast.error(error.message) });
+  const rows = query.data || [];
+  const save = (event: React.FormEvent) => { event.preventDefault(); if (!name.trim() || !signature) { toast.error("Le nom et la signature sont obligatoires."); return; } if (editingId) update.mutate({ id: editingId, name: name.trim(), signatureData: signature }); else create.mutate({ name: name.trim(), signatureData: signature }); };
+  const move = (index: number, direction: -1 | 1) => { const next = [...rows]; const target = index + direction; if (target < 0 || target >= next.length || !signature) { if (!signature) toast.error("Signez l’action avant de réordonner les critères."); return; } [next[index], next[target]] = [next[target], next[index]]; reorder.mutate({ signatureData: signature, items: next.map((row, order) => ({ id: row.id, sortOrder: order })) }); };
+  return <Card className="mt-6 border-[#e1e9e3] shadow-none"><CardHeader><div className="flex items-center gap-3"><div className="rounded-xl bg-[#e7f4e9] p-2 text-[#227447]"><Pencil size={18} /></div><div><CardTitle className="font-serif text-2xl">Critères de contrôle</CardTitle><p className="mt-1 text-sm text-[#819388]">Personnalisez les points vérifiés chaque mois. Les anciens rapports conservent leur libellé d’origine.</p></div></div></CardHeader><CardContent><div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"><div className="overflow-x-auto rounded-2xl border border-[#e3ebe4] bg-white"><table className="w-full min-w-[560px] border-collapse text-left"><thead className="bg-[#f4f8f4]"><tr className="border-b border-[#e3ebe4]"><th className="px-4 py-3 text-[11px] uppercase tracking-wider text-[#718579]">Ordre</th><th className="px-4 py-3 text-[11px] uppercase tracking-wider text-[#718579]">Critère</th><th className="px-4 py-3 text-[11px] uppercase tracking-wider text-[#718579]">Statut</th><th className="px-4 py-3 text-right text-[11px] uppercase tracking-wider text-[#718579]">Actions</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.id} className="border-b border-[#edf1ed] last:border-0"><td className="px-4 py-3"><div className="flex items-center gap-2 text-xs text-[#718579]"><GripVertical size={14} />{index + 1}<div className="flex gap-1"><button type="button" onClick={() => move(index, -1)} className="rounded border px-1.5" aria-label="Monter le critère">↑</button><button type="button" onClick={() => move(index, 1)} className="rounded border px-1.5" aria-label="Descendre le critère">↓</button></div></div></td><td className="px-4 py-3 text-sm font-semibold">{row.name}</td><td className="px-4 py-3"><span className={row.active ? "rounded-full bg-[#e7f4e9] px-2.5 py-1 text-[10px] font-semibold text-[#227447]" : "rounded-full bg-[#fff0d4] px-2.5 py-1 text-[10px] font-semibold text-[#a96916]"}>{row.active ? "Actif" : "Archivé"}</span></td><td className="px-4 py-3"><div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" className="rounded-xl" onClick={() => { setEditingId(row.id); setName(row.name); }}>Modifier</Button><Button type="button" size="sm" variant="outline" className="rounded-xl" disabled={!signature} onClick={() => setActive.mutate({ id: row.id, active: !Boolean(row.active), signatureData: signature || "" })}>{row.active ? "Archiver" : "Restaurer"}</Button></div></td></tr>)}</tbody></table></div><form onSubmit={save} className="rounded-2xl bg-[#f0f6f1] p-5"><p className="font-semibold">{editingId ? "Modifier un critère" : "Ajouter un critère"}</p><p className="mt-1 text-xs leading-5 text-[#718579]">Signez chaque action pour conserver une trace du changement.</p><Input value={name} onChange={event => setName(event.target.value)} placeholder="Ex. Accessibilité des protections" className="mt-4 rounded-xl border-[#dbe8de] bg-white" /><div className="mt-4"><MiniSignature value={signature} onChange={setSignature} /></div><div className="mt-4 flex gap-2"><Button type="submit" disabled={!name.trim() || !signature || create.isPending || update.isPending} className="flex-1 rounded-xl bg-[#227447] text-white hover:bg-[#1b603a]">{editingId ? "Enregistrer" : "Ajouter"}</Button>{editingId && <Button type="button" variant="outline" onClick={reset} className="rounded-xl">Annuler</Button>}</div></form></div></CardContent></Card>;
+}

@@ -13,6 +13,17 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+export const criteria = mysqlTable("criteria", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 80 }).notNull().unique(),
+  active: int("active").default(1).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  lastActionBy: int("lastActionBy"),
+  lastActionSignature: text("lastActionSignature"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const equipment = mysqlTable("equipment", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 120 }).notNull(),
@@ -49,6 +60,7 @@ export const inspectionItems = mysqlTable("inspection_items", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type CriterionRow = typeof criteria.$inferSelect;
 export type Equipment = typeof equipment.$inferSelect;
 export type Inspection = typeof inspections.$inferSelect;
 export type InspectionItem = typeof inspectionItems.$inferSelect;

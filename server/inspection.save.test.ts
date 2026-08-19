@@ -36,3 +36,9 @@ describe("inspection save", () => {
     expect(items).toHaveLength(5);
     expect(items.every(item => item.status === "conforme")).toBe(true);
   });
+
+  it("accepts a custom criterion label in a historical report", async () => {
+    const caller = appRouter.createCaller(ctx);
+    await caller.inspections.save({ month: "2026-09", status: "draft", signatureData: null, notes: null, items: [{ equipmentId: 1, criterion: "Accessibilité des protections", status: "conforme", comment: "Contrôlé" }] });
+    expect(saveInspectionMock).toHaveBeenLastCalledWith(expect.objectContaining({ items: [expect.objectContaining({ criterion: "Accessibilité des protections" })] }));
+  });

@@ -4,12 +4,12 @@ import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { ensureDefaultEquipment, getInspectionByMonth, getUserByOpenId, getDb, listEquipment, listInspections, saveInspection } from "./db";
+import { ensureDefaultCriteria, ensureDefaultEquipment, getInspectionByMonth, getUserByOpenId, getDb, listCriteria, listEquipment, listInspections, saveInspection } from "./db";
 import { desc, eq } from "drizzle-orm";
-import { users } from "../drizzle/schema";
+import { criteria, users } from "../drizzle/schema";
 
 const statusSchema = z.enum(["conforme", "non conforme", "à surveiller"]);
-const criterionSchema = z.enum(["sécurité", "fiabilité", "stabilité", "état général", "propreté"]);
+const criterionSchema = z.string().trim().min(1).max(80);
 const authorizedProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.accessStatus !== "approved" && ctx.user.openId !== process.env.OWNER_OPEN_ID) throw new TRPCError({ code: "FORBIDDEN", message: "Votre compte doit être approuvé par un administrateur du collège." });
   return next();
@@ -50,11 +50,36 @@ export const appRouter = router({
       return { success: true } as const;
     }),
   }),
+  criteria: router({
+    list: authorizedProcedure.query(() => listCriteria()),
+    manageList: authorizedProcedure.query(() => listCriteria(true)),
+    create: authorizedProcedure.input(z.object({ name: z.string().trim().min(2).max(80), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      const existing = await db.select().from(criteria).orderBy(criteria.sortOrder, criteria.id);
+      await db.insert(criteria).values({ name: input.name, active: 1, sortOrder: existing.length, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData });
+      return { success: true } as const;
+    }),
+    update: authorizedProcedure.input(z.object({ id: z.number(), name: z.string().trim().min(2).max(80), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      await db.update(criteria).set({ name: input.name, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData }).where(eq(criteria.id, input.id));
+      return { success: true } as const;
+    }),
+    setActive: authorizedProcedure.input(z.object({ id: z.number(), active: z.boolean(), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      await db.update(criteria).set({ active: input.active ? 1 : 0, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData }).where(eq(criteria.id, input.id));
+      return { success: true } as const;
+    }),
+    reorder: authorizedProcedure.input(z.object({ items: z.array(z.object({ id: z.number(), sortOrder: z.number().int().min(0) })).min(1), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      for (const item of input.items) await db.update(criteria).set({ sortOrder: item.sortOrder, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData }).where(eq(criteria.id, item.id));
+      return { success: true } as const;
+    }),
+  }),
   inspections: router({
     dashboard: authorizedProcedure.query(async () => {
       const month = new Date().toISOString().slice(0, 7);
-      const [current, history, equipment] = await Promise.all([getInspectionByMonth(month), listInspections(), ensureDefaultEquipment()]);
-      return { month, current, history: history.slice(0, 12), equipment };
+      const [current, history, equipment, criteriaRows] = await Promise.all([getInspectionByMonth(month), listInspections(), ensureDefaultEquipment(), ensureDefaultCriteria()]);
+      return { month, current, history: history.slice(0, 12), equipment, criteria: criteriaRows };
     }),
     byMonth: authorizedProcedure.input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) })).query(({ input }) => getInspectionByMonth(input.month)),
     history: authorizedProcedure.input(z.object({ month: z.string().optional(), equipmentId: z.number().optional() }).optional()).query(async ({ input }) => {

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { DEFAULT_EQUIPMENT, InsertUser, equipment, inspectionItems, inspections, users } from "../drizzle/schema";
+import { CRITERIA, DEFAULT_EQUIPMENT, InsertUser, criteria, equipment, inspectionItems, inspections, users } from "../drizzle/schema";
 import { attachEquipmentMetadata } from "../shared/inspection";
 import { ENV } from "./_core/env";
 
@@ -61,6 +61,24 @@ export async function ensureDefaultEquipment() {
 
 export async function listEquipment() {
   return ensureDefaultEquipment();
+}
+
+export async function ensureDefaultCriteria() {
+  const db = await getDb();
+  if (!db) return [];
+  const existing = await db.select().from(criteria).where(eq(criteria.active, 1)).orderBy(criteria.sortOrder, criteria.id);
+  if (existing.length === 0) {
+    await db.insert(criteria).values(CRITERIA.map((name, index) => ({ name, active: 1, sortOrder: index })));
+    return db.select().from(criteria).where(eq(criteria.active, 1)).orderBy(criteria.sortOrder, criteria.id);
+  }
+  return existing;
+}
+
+export async function listCriteria(includeArchived = false) {
+  const db = await getDb();
+  if (!db) return [];
+  if (includeArchived) return db.select().from(criteria).orderBy(criteria.active, criteria.sortOrder, criteria.id);
+  return ensureDefaultCriteria();
 }
 
 export async function getInspectionByMonth(month: string) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateInspectionStatus, attachEquipmentMetadata, completeEquipmentEntries } from "../shared/inspection";
+import { aggregateInspectionStatus, attachEquipmentMetadata, completeEquipmentEntries, historicalReportItems } from "../shared/inspection";
 
 describe("inspection status rules", () => {
   it("marks an equipment non conforme when at least one criterion is non conforme", () => {
@@ -31,5 +31,13 @@ describe("completeEquipmentEntries", () => {
     expect(Object.values(result)).toHaveLength(5);
     expect(Object.values(result).every(entry => entry.status === "conforme")).toBe(true);
     expect(result["7::sécurité"]?.comment).toBe("Zone humide");
+  });
+});
+
+describe("historical report criteria", () => {
+  it("keeps a renamed or archived criterion label from the saved report", () => {
+    const rows = historicalReportItems([{ equipmentId: 1, criterion: "Accessibilité des protections", status: "conforme", comment: "Ancien libellé conservé" }]);
+    expect(rows[0]?.criterion).toBe("Accessibilité des protections");
+    expect(rows[0]?.comment).toBe("Ancien libellé conservé");
   });
 });

@@ -135,3 +135,21 @@
 
 - [x] Afficher distinctement les équipements vérifiés et ceux restant à vérifier
 - [x] Vérifier visuellement le résumé double sur le parcours mobile
+
+## Gestion personnalisée des critères
+
+- [x] Créer un modèle de critères personnalisables
+- [x] Permettre d’ajouter un critère
+- [x] Permettre de modifier un critère
+- [x] Permettre de réordonner les critères
+- [x] Permettre d’archiver et restaurer un critère
+- [x] Restreindre la gestion aux membres autorisés
+- [x] Préserver les critères utilisés dans les contrôles historiques
+- [x] Adapter le formulaire de contrôle aux critères actifs
+- [x] Adapter les exports PDF aux critères du rapport
+- [x] Ajouter les tests de gestion et de conservation des critères
+
+## Export historique des critères
+
+- [x] Utiliser explicitement les critères présents dans les lignes du rapport pour le PDF
+- [x] Tester un critère renommé ou archivé conservé dans la représentation historique
