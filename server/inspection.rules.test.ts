@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateInspectionStatus, attachEquipmentMetadata } from "../shared/inspection";
+import { aggregateInspectionStatus, attachEquipmentMetadata, completeEquipmentEntries } from "../shared/inspection";
 
 describe("inspection status rules", () => {
   it("marks an equipment non conforme when at least one criterion is non conforme", () => {
@@ -22,5 +22,14 @@ describe("inspection status rules", () => {
     const archived = { id: 7, name: "Ancienne balançoire", active: 0 };
     const result = attachEquipmentMetadata([{ equipmentId: 7, criterion: "sécurité" }], [archived]);
     expect(result[0]?.equipment).toEqual(archived);
+  });
+});
+
+describe("completeEquipmentEntries", () => {
+  it("marks all five criteria as conforme and preserves comments", () => {
+    const result = completeEquipmentEntries(7, ["sécurité", "fiabilité", "stabilité", "état général", "propreté"], { "7::sécurité": { status: "à surveiller", comment: "Zone humide" } });
+    expect(Object.values(result)).toHaveLength(5);
+    expect(Object.values(result).every(entry => entry.status === "conforme")).toBe(true);
+    expect(result["7::sécurité"]?.comment).toBe("Zone humide");
   });
 });

@@ -11,3 +11,12 @@ export function aggregateInspectionStatus(statuses: InspectionStatusValue[]): In
 export function attachEquipmentMetadata<Item extends { equipmentId: number }, Equipment extends { id: number }>(items: Item[], equipmentRows: Equipment[]) {
   return items.map(item => ({ ...item, equipment: equipmentRows.find(equipment => equipment.id === item.equipmentId) }));
 }
+
+export function completeEquipmentEntries<Entry extends { status: InspectionStatusValue; comment: string }>(equipmentId: number, criteria: readonly string[], existing: Record<string, Entry>) {
+  const next = { ...existing };
+  for (const criterion of criteria) {
+    const key = `${equipmentId}::${criterion}`;
+    next[key] = { ...(existing[key] || { comment: "" }), status: "conforme" } as Entry;
+  }
+  return next;
+}

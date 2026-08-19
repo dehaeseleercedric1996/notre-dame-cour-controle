@@ -81,3 +81,57 @@
 
 - [x] Centraliser le contexte de test du personnel autorisé
 - [x] Vérifier globalement que les procédures métier utilisent accessStatus et non role
+
+## Expérience de contrôle améliorée
+
+- [x] Ajouter une progression claire du contrôle mensuel
+- [x] Organiser la saisie par équipement avec navigation précédent/suivant
+- [x] Ajouter un résumé des équipements et critères restant à vérifier
+- [x] Ajouter des boutons de statut plus grands et adaptés au terrain
+- [x] Permettre de marquer rapidement un équipement comme vérifié
+- [x] Afficher l’état de sauvegarde automatique du contrôle
+- [x] Améliorer la saisie mobile de la signature et des commentaires
+- [x] Ajouter une confirmation avant la clôture du contrôle
+- [x] Tester le nouveau parcours sur ordinateur et smartphone
+
+## Parcours de contrôle guidé
+
+- [x] Afficher une progression globale du contrôle
+- [x] Naviguer équipement par équipement avec boutons précédent et suivant
+- [x] Afficher les critères restant à compléter
+- [x] Agrandir les boutons de statut pour la saisie sur le terrain
+- [x] Ajouter un résumé des équipements vérifiés et à vérifier
+- [x] Afficher clairement l’état de sauvegarde automatique
+- [x] Améliorer la saisie mobile des commentaires et de la signature
+- [x] Confirmer la clôture du contrôle avant enregistrement définitif
+- [x] Tester le parcours sur ordinateur et smartphone
+
+## Compléments d’expérience à valider
+
+- [x] Afficher la liste des critères non renseignés pour l’équipement courant
+- [x] Afficher un résumé explicite des équipements restant à vérifier
+- [x] Améliorer réellement les zones de commentaire et de signature sur mobile
+- [x] Capturer et vérifier le parcours de contrôle sur desktop après les changements
+
+## Action rapide par équipement
+
+- [x] Ajouter une action explicite « marquer cet équipement comme vérifié »
+- [x] Appliquer rapidement le statut conforme aux cinq critères de l’équipement
+- [x] Tester la sauvegarde automatique après cette action rapide
+- [x] Vérifier l’action rapide sur desktop et mobile
+
+## Preuve de l’action rapide
+
+- [x] Ajouter un test de la logique qui marque les cinq critères comme conformes
+- [x] Vérifier que l’action rapide déclenche le brouillon automatique
+- [x] Documenter la vérification fonctionnelle du clic rapide
+
+## Scénario vérifiable de sauvegarde rapide
+
+- [x] Tester le payload de brouillon produit après validation rapide d’un équipement
+- [x] Documenter le scénario clic, passage à conforme et sauvegarde automatique confirmée
+
+## Résumé double vérifié
+
+- [x] Afficher distinctement les équipements vérifiés et ceux restant à vérifier
+- [x] Vérifier visuellement le résumé double sur le parcours mobile
