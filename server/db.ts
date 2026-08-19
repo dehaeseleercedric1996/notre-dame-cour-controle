@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { DEFAULT_EQUIPMENT, InsertUser, equipment, inspectionItems, inspections, users } from "../drizzle/schema";
+import { attachEquipmentMetadata } from "../shared/inspection";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -68,7 +69,8 @@ export async function getInspectionByMonth(month: string) {
   const inspection = (await db.select().from(inspections).where(eq(inspections.month, month)).limit(1))[0];
   if (!inspection) return undefined;
   const items = await db.select().from(inspectionItems).where(eq(inspectionItems.inspectionId, inspection.id));
-  return { ...inspection, items };
+  const equipmentRows = items.length ? await db.select().from(equipment).where(inArray(equipment.id, items.map(item => item.equipmentId))) : [];
+  return { ...inspection, items: attachEquipmentMetadata(items, equipmentRows) };
 }
 
 export async function listInspections(month?: string) {
@@ -80,7 +82,8 @@ export async function listInspections(month?: string) {
   if (rows.length === 0) return [];
   const ids = rows.map(row => row.id);
   const items = await db.select().from(inspectionItems).where(inArray(inspectionItems.inspectionId, ids));
-  return rows.map(row => ({ ...row, items: items.filter(item => item.inspectionId === row.id) }));
+  const equipmentRows = items.length ? await db.select().from(equipment).where(inArray(equipment.id, items.map(item => item.equipmentId))) : [];
+  return rows.map(row => ({ ...row, items: attachEquipmentMetadata(items.filter(item => item.inspectionId === row.id), equipmentRows) }));
 }
 
 export async function saveInspection(input: {

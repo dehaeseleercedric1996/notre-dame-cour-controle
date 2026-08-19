@@ -31,12 +31,27 @@ export const appRouter = router({
   }),
   equipment: router({
     list: authorizedProcedure.query(() => listEquipment()),
+    adminList: adminProcedure.query(async () => { const db = await getDb(); if (!db) return []; const { equipment } = await import("../drizzle/schema"); return db.select().from(equipment).orderBy(desc(equipment.active), desc(equipment.updatedAt)); }),
     create: adminProcedure.input(z.object({ name: z.string().min(2), category: z.string().min(2), description: z.string().optional() })).mutation(async ({ input }) => {
-      const db = await import("./db").then(module => module.getDb());
+      const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
       const { equipment } = await import("../drizzle/schema");
-      await db.insert(equipment).values({ name: input.name, category: input.category, description: input.description ?? null, active: 1 });
-      return listEquipment();
+      await db.insert(equipment).values({ name: input.name.trim(), category: input.category.trim(), description: input.description?.trim() || null, active: 1 });
+      return { success: true } as const;
+    }),
+    update: adminProcedure.input(z.object({ id: z.number(), name: z.string().min(2), category: z.string().min(2), description: z.string().optional() })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      const { equipment } = await import("../drizzle/schema");
+      await db.update(equipment).set({ name: input.name.trim(), category: input.category.trim(), description: input.description?.trim() || null }).where(eq(equipment.id, input.id));
+      return { success: true } as const;
+    }),
+    setActive: adminProcedure.input(z.object({ id: z.number(), active: z.boolean() })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
+      const { equipment } = await import("../drizzle/schema");
+      await db.update(equipment).set({ active: input.active ? 1 : 0 }).where(eq(equipment.id, input.id));
+      return { success: true } as const;
     }),
   }),
   staffAccess: router({

@@ -7,3 +7,7 @@ export function aggregateInspectionStatus(statuses: InspectionStatusValue[]): In
   if (statuses.includes("à surveiller")) return "à surveiller";
   return "conforme";
 }
+
+export function attachEquipmentMetadata<Item extends { equipmentId: number }, Equipment extends { id: number }>(items: Item[], equipmentRows: Equipment[]) {
+  return items.map(item => ({ ...item, equipment: equipmentRows.find(equipment => equipment.id === item.equipmentId) }));
+}

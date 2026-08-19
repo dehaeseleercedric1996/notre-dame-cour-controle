@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateInspectionStatus } from "../shared/inspection";
+import { aggregateInspectionStatus, attachEquipmentMetadata } from "../shared/inspection";
 
 describe("inspection status rules", () => {
   it("marks an equipment non conforme when at least one criterion is non conforme", () => {
@@ -16,5 +16,11 @@ describe("inspection status rules", () => {
 
   it("returns pending when no criterion has been entered", () => {
     expect(aggregateInspectionStatus([])).toBe("pending");
+  });
+
+  it("keeps archived equipment metadata attached to an historical item", () => {
+    const archived = { id: 7, name: "Ancienne balançoire", active: 0 };
+    const result = attachEquipmentMetadata([{ equipmentId: 7, criterion: "sécurité" }], [archived]);
+    expect(result[0]?.equipment).toEqual(archived);
   });
 });
