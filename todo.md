@@ -153,3 +153,12 @@
 
 - [x] Utiliser explicitement les critères présents dans les lignes du rapport pour le PDF
 - [x] Tester un critère renommé ou archivé conservé dans la représentation historique
+
+## Repérage visuel des critères récents
+
+- [x] Définir les seuils de récence pour les badges Nouveau et Modifié
+- [x] Exposer les dates de création et de dernière modification des critères
+- [x] Ajouter le badge Nouveau avec un code couleur dédié
+- [x] Ajouter le badge Modifié avec un code couleur dédié
+- [x] Vérifier que les badges disparaissent après la période de récence
+- [x] Tester les règles de récence et l’affichage responsive
