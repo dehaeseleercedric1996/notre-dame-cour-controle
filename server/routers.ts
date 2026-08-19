@@ -5,17 +5,13 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { ensureDefaultEquipment, getInspectionByMonth, getUserByOpenId, getDb, listEquipment, listInspections, saveInspection } from "./db";
-import { users } from "../drizzle/schema";
 import { desc, eq } from "drizzle-orm";
+import { users } from "../drizzle/schema";
 
 const statusSchema = z.enum(["conforme", "non conforme", "à surveiller"]);
 const criterionSchema = z.enum(["sécurité", "fiabilité", "stabilité", "état général", "propreté"]);
 const authorizedProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.accessStatus !== "approved" && ctx.user.openId !== process.env.OWNER_OPEN_ID) throw new TRPCError({ code: "FORBIDDEN", message: "Votre compte doit être approuvé par un administrateur du collège." });
-  return next();
-});
-const adminProcedure = authorizedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Accès administrateur requis." });
   return next();
 });
 
@@ -31,32 +27,28 @@ export const appRouter = router({
   }),
   equipment: router({
     list: authorizedProcedure.query(() => listEquipment()),
-    adminList: adminProcedure.query(async () => { const db = await getDb(); if (!db) return []; const { equipment } = await import("../drizzle/schema"); return db.select().from(equipment).orderBy(desc(equipment.active), desc(equipment.updatedAt)); }),
-    create: adminProcedure.input(z.object({ name: z.string().min(2), category: z.string().min(2), description: z.string().optional() })).mutation(async ({ input }) => {
+    manageList: authorizedProcedure.query(async () => { const db = await getDb(); if (!db) return []; const { equipment } = await import("../drizzle/schema"); return db.select({ id: equipment.id, name: equipment.name, category: equipment.category, description: equipment.description, active: equipment.active, lastActionBy: equipment.lastActionBy, lastActionSignature: equipment.lastActionSignature, updatedAt: equipment.updatedAt, authorName: users.name, authorEmail: users.email }).from(equipment).leftJoin(users, eq(equipment.lastActionBy, users.id)).orderBy(desc(equipment.active), desc(equipment.updatedAt)); }),
+    create: authorizedProcedure.input(z.object({ name: z.string().min(2), category: z.string().min(2), description: z.string().optional(), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
       const { equipment } = await import("../drizzle/schema");
-      await db.insert(equipment).values({ name: input.name.trim(), category: input.category.trim(), description: input.description?.trim() || null, active: 1 });
+      await db.insert(equipment).values({ name: input.name.trim(), category: input.category.trim(), description: input.description?.trim() || null, active: 1, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData });
       return { success: true } as const;
     }),
-    update: adminProcedure.input(z.object({ id: z.number(), name: z.string().min(2), category: z.string().min(2), description: z.string().optional() })).mutation(async ({ input }) => {
+    update: authorizedProcedure.input(z.object({ id: z.number(), name: z.string().min(2), category: z.string().min(2), description: z.string().optional(), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
       const { equipment } = await import("../drizzle/schema");
-      await db.update(equipment).set({ name: input.name.trim(), category: input.category.trim(), description: input.description?.trim() || null }).where(eq(equipment.id, input.id));
+      await db.update(equipment).set({ name: input.name.trim(), category: input.category.trim(), description: input.description?.trim() || null, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData }).where(eq(equipment.id, input.id));
       return { success: true } as const;
     }),
-    setActive: adminProcedure.input(z.object({ id: z.number(), active: z.boolean() })).mutation(async ({ input }) => {
+    setActive: authorizedProcedure.input(z.object({ id: z.number(), active: z.boolean(), signatureData: z.string().min(10) })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." });
       const { equipment } = await import("../drizzle/schema");
-      await db.update(equipment).set({ active: input.active ? 1 : 0 }).where(eq(equipment.id, input.id));
+      await db.update(equipment).set({ active: input.active ? 1 : 0, lastActionBy: ctx.user.id, lastActionSignature: input.signatureData }).where(eq(equipment.id, input.id));
       return { success: true } as const;
     }),
-  }),
-  staffAccess: router({
-    list: adminProcedure.query(async () => { const db = await getDb(); return db ? db.select({ id: users.id, name: users.name, email: users.email, role: users.role, accessStatus: users.accessStatus, lastSignedIn: users.lastSignedIn }).from(users).orderBy(desc(users.lastSignedIn)) : []; }),
-    setStatus: adminProcedure.input(z.object({ userId: z.number(), accessStatus: z.enum(["approved", "revoked"]) })).mutation(async ({ input }) => { const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de données indisponible." }); await db.update(users).set({ accessStatus: input.accessStatus }).where(eq(users.id, input.userId)); return { success: true } as const; }),
   }),
   inspections: router({
     dashboard: authorizedProcedure.query(async () => {

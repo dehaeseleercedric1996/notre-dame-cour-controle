@@ -47,3 +47,37 @@
 - [x] Ajouter les tests de modification d’équipement et de conservation historique
 
 - [x] Générer les PDF historiques uniquement à partir des équipements référencés dans le rapport
+
+## Affichage tableau des équipements
+
+- [x] Remplacer la liste administrateur par un tableau lisible
+- [x] Conserver les actions modifier, archiver et restaurer dans le tableau
+- [x] Adapter le tableau à l’affichage smartphone
+- [x] Vérifier visuellement le tableau sur ordinateur et mobile
+
+- [x] Effectuer une vérification visuelle authentifiée du tableau administrateur sur desktop et mobile
+
+## Accès commun du personnel autorisé
+
+- [x] Supprimer la distinction administrateur / inspecteur dans l’interface
+- [x] Autoriser tout membre approuvé à ajouter, modifier, archiver et restaurer les équipements
+- [x] Supprimer la gestion des comptes réservée à un administrateur
+- [x] Afficher l’auteur des actions de gestion des équipements
+- [x] Permettre à chaque membre autorisé de signer ses contrôles et ses modifications
+- [x] Adapter les tests aux permissions communes du personnel autorisé
+
+## Traçabilité complète des actions
+
+- [x] Afficher le nom du dernier auteur et la date de son action dans le tableau
+- [x] Harmoniser les tests restants avec le modèle de personnel autorisé
+- [x] Tester explicitement ajout, modification, archivage et restauration signés
+
+## Harmonisation finale des tests
+
+- [x] Remplacer les noms et libellés Inspecteur des fixtures par Personnel autorisé
+- [x] Vérifier qu’aucun test métier ne dépend fonctionnellement d’un rôle administrateur ou inspecteur
+
+## Vérification globale des permissions
+
+- [x] Centraliser le contexte de test du personnel autorisé
+- [x] Vérifier globalement que les procédures métier utilisent accessStatus et non role

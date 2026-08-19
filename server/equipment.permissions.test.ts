@@ -11,24 +11,32 @@ vi.mock("./db", () => ({
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { personnelContext } from "./test-context";
 
-function ctx(role: "admin" | "inspecteur", accessStatus: "approved" | "pending"): TrpcContext {
-  return { user: { id: 9, openId: "equipment-test", name: "Test", email: "test@example.com", loginMethod: "manus", role, accessStatus, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: { protocol: "https", headers: {} } as TrpcContext["req"], res: {} as TrpcContext["res"] };
+function ctx(accessStatus: "approved" | "pending"): TrpcContext {
+  return personnelContext(accessStatus, 9);
 }
 
-describe("equipment administration", () => {
-  it("rejects equipment mutations from an inspector", async () => {
-    const caller = appRouter.createCaller(ctx("inspecteur", "approved"));
-    await expect(caller.equipment.create({ name: "Bac à sable", category: "Jeu" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(caller.equipment.setActive({ id: 1, active: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
+const signatureData = "data:image/png;base64,personnel-signature";
+
+describe("equipment personnel access", () => {
+  it("rejects equipment mutations from a non-approved account", async () => {
+    const caller = appRouter.createCaller(ctx("pending"));
+    await expect(caller.equipment.create({ name: "Bac à sable", category: "Jeu", signatureData })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("allows an approved administrator to add and archive an equipment", async () => {
-    const caller = appRouter.createCaller(ctx("admin", "approved"));
-    await expect(caller.equipment.create({ name: "Bac à sable", category: "Jeu", description: "Zone dédiée" })).resolves.toEqual({ success: true });
-    await expect(caller.equipment.update({ id: 1, name: "Bac à sable rénové", category: "Jeu", description: "Description mise à jour" })).resolves.toEqual({ success: true });
-    await expect(caller.equipment.setActive({ id: 1, active: false })).resolves.toEqual({ success: true });
-    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ name: "Bac à sable", active: 1 }));
+  it("requires a signature before allowing an approved member to add equipment", async () => {
+    const caller = appRouter.createCaller(ctx("approved"));
+    await expect(caller.equipment.create({ name: "Bac à sable", category: "Jeu", signatureData: "" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("allows an approved member to add, modify and archive an equipment", async () => {
+    const caller = appRouter.createCaller(ctx("approved"));
+    await expect(caller.equipment.create({ name: "Bac à sable", category: "Jeu", description: "Zone dédiée", signatureData })).resolves.toEqual({ success: true });
+    await expect(caller.equipment.update({ id: 1, name: "Bac à sable rénové", category: "Jeu", description: "Description mise à jour", signatureData })).resolves.toEqual({ success: true });
+    await expect(caller.equipment.setActive({ id: 1, active: false, signatureData })).resolves.toEqual({ success: true });
+    await expect(caller.equipment.setActive({ id: 1, active: true, signatureData })).resolves.toEqual({ success: true });
+    expect(insertValues).toHaveBeenCalledWith(expect.objectContaining({ name: "Bac à sable", active: 1, lastActionBy: 9, lastActionSignature: signatureData }));
     expect(updateWhere).toHaveBeenCalled();
   });
 });

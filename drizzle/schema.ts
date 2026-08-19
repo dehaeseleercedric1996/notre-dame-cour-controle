@@ -19,6 +19,8 @@ export const equipment = mysqlTable("equipment", {
   category: varchar("category", { length: 80 }).notNull(),
   description: text("description"),
   active: int("active").default(1).notNull(),
+  lastActionBy: int("lastActionBy"),
+  lastActionSignature: text("lastActionSignature"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

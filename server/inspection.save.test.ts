@@ -13,12 +13,9 @@ vi.mock("./db", () => ({
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { personnelContext } from "./test-context";
 
-const ctx = {
-  user: { id: 3, openId: "approved-inspector", name: "Inspecteur", email: "inspecteur@example.com", loginMethod: "manus", role: "inspecteur", accessStatus: "approved", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() },
-  req: { protocol: "https", headers: {} },
-  res: {},
-} as TrpcContext;
+const ctx: TrpcContext = personnelContext("approved", 3);
 
 describe("inspection save", () => {
   it("persists a draft with its inspection items", async () => {
