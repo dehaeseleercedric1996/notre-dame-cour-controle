@@ -1,33 +1,108 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/lib/trpc";
+import { aggregateInspectionStatus } from "@shared/inspection";
+import { cn } from "@/lib/utils";
+import { jsPDF } from "jspdf";
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, ClipboardCheck, Download, Eraser, FileClock, Leaf, Loader2, Minus, PenLine, ShieldAlert, ShieldCheck, Sparkles, UserRound, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
+import { toast } from "sonner";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
+const CRITERIA = ["sécurité", "fiabilité", "stabilité", "état général", "propreté"] as const;
+const STATUSES = ["conforme", "non conforme", "à surveiller"] as const;
+type Status = typeof STATUSES[number];
+type Entry = { status: Status; comment: string };
+const keyFor = (equipmentId: number, criterion: string) => `${equipmentId}::${criterion}`;
+const monthLabel = (month: string) => new Intl.DateTimeFormat("fr-BE", { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`));
+
+function statusMeta(status: Status | "pending") {
+  if (status === "conforme") return { label: "Conforme", color: "green", icon: CheckCircle2, className: "bg-[#e7f4e9] text-[#227447] border-[#cce6d2]" };
+  if (status === "non conforme") return { label: "Non conforme", color: "red", icon: ShieldAlert, className: "bg-[#fceae7] text-[#b44436] border-[#f2c8c1]" };
+  if (status === "à surveiller") return { label: "À surveiller", color: "orange", icon: AlertTriangle, className: "bg-[#fff3dd] text-[#a96916] border-[#f1d6a4]" };
+  return { label: "À compléter", color: "orange", icon: Minus, className: "bg-[#fff3dd] text-[#a96916] border-[#f1d6a4]" };
+}
+
+function aggregateStatus(entries: Entry[]) : Status | "pending" {
+  return aggregateInspectionStatus(entries.map(entry => entry.status));
+}
+
+function SignaturePad({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const rect = canvas.getBoundingClientRect(); const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width); const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+    if (!drawing.current) { ctx.beginPath(); ctx.moveTo(x, y); } else { ctx.lineTo(x, y); ctx.stroke(); }
+    drawing.current = true; onChange(canvas.toDataURL("image/png"));
+  };
+  const clear = () => { const canvas = canvasRef.current; const ctx = canvas?.getContext("2d"); if (canvas && ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); onChange(null); } };
+  useEffect(() => { const canvas = canvasRef.current; const ctx = canvas?.getContext("2d"); if (ctx) { ctx.strokeStyle = "#19352a"; ctx.lineWidth = 2.2; ctx.lineCap = "round"; } }, []);
+  useEffect(() => { if (!value || !canvasRef.current) return; const image = new Image(); image.onload = () => { const ctx = canvasRef.current?.getContext("2d"); if (ctx && canvasRef.current) ctx.drawImage(image, 0, 0, canvasRef.current.width, canvasRef.current.height); }; image.src = value; }, [value]);
+  return <div><div className="relative overflow-hidden rounded-2xl border border-dashed border-[#b8cdbd] bg-white"><canvas ref={canvasRef} width={640} height={190} className="h-32 w-full touch-none" onPointerDown={draw} onPointerMove={draw} onPointerUp={() => { drawing.current = false; }} onPointerLeave={() => { drawing.current = false; }} aria-label="Zone de signature de l’inspecteur" />{!value && <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-[#9aab9f]"><PenLine size={15} className="mr-2" /> Signez ici avec votre doigt ou votre souris</div>}</div><button type="button" onClick={clear} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#718579] hover:text-[#b44436]"><Eraser size={13} /> Effacer la signature</button></div>;
+}
+
+function StatusPill({ status }: { status: Status | "pending" }) { const meta = statusMeta(status); const Icon = meta.icon; return <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold", meta.className)}><Icon size={13} />{meta.label}</span>; }
+
 export default function Home() {
-  // The useAuth hook provides authentication state.
-  // To implement login/logout, call logout(), or start login from an event
-  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
-  // startLogin() during render (no href={startLogin()}) — it mints a one-time
-  // nonce cookie and must run only at the moment of navigation.
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  const [location, setLocation] = useLocation();
+  const { user } = useAuth();
+  const { data, isLoading, error, refetch } = trpc.inspections.dashboard.useQuery();
+  const staffQuery = trpc.staffAccess.list.useQuery(undefined, { enabled: user?.role === "admin" });
+  const staffMutation = trpc.staffAccess.setStatus.useMutation({ onSuccess: () => staffQuery.refetch(), onError: error => toast.error(error.message) });
+  const save = trpc.inspections.save.useMutation({ onSuccess: () => { toast.success("Contrôle sauvegardé"); refetch(); setLocation("/"); }, onError: error => toast.error(error.message) });
+  const autoSave = trpc.inspections.save.useMutation({ onSuccess: () => refetch(), onError: () => undefined });
+  const currentMonth = data?.month ?? new Date().toISOString().slice(0, 7);
+  const [entries, setEntries] = useState<Record<string, Entry>>({});
+  const [signature, setSignature] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [historyMonth, setHistoryMonth] = useState("");
+  const [historyEquipment, setHistoryEquipment] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
 
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  useEffect(() => {
+    if (!data?.current) return;
+    const next: Record<string, Entry> = {};
+    for (const item of data.current.items) next[keyFor(item.equipmentId, item.criterion)] = { status: item.status as Status, comment: item.comment || "" };
+    setEntries(next); setSignature(data.current.signatureData); setNotes(data.current.notes || ""); setIsDirty(false);
+  }, [data?.current]);
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
-    </div>
-  );
+  const equipmentStatuses = useMemo(() => Object.fromEntries((data?.equipment || []).map(item => [item.id, aggregateStatus(CRITERIA.map(criterion => entries[keyFor(item.id, criterion)]).filter(Boolean))])), [data?.equipment, entries]);
+  const completedCount = Object.values(equipmentStatuses).filter(status => status === "conforme").length;
+  const anomalyCount = Object.values(entries).filter(entry => entry.status === "non conforme").length;
+  const isControl = location === "/controle";
+  const isHistory = location === "/historique";
+  const filteredHistory = useMemo(() => (data?.history || []).filter(row => (!historyMonth || row.month === historyMonth) && (!historyEquipment || row.items.some(item => String(item.equipmentId) === historyEquipment))), [data?.history, historyMonth, historyEquipment]);
+
+  const setEntry = (equipmentId: number, criterion: string, patch: Partial<Entry>) => { setIsDirty(true); setEntries(previous => ({ ...previous, [keyFor(equipmentId, criterion)]: { status: previous[keyFor(equipmentId, criterion)]?.status || "à surveiller", comment: previous[keyFor(equipmentId, criterion)]?.comment || "", ...patch } })); };
+  const buildItems = () => (data?.equipment || []).flatMap(item => CRITERIA.map(criterion => ({ equipmentId: item.id, criterion, status: entries[keyFor(item.id, criterion)]?.status || "à surveiller" as Status, comment: entries[keyFor(item.id, criterion)]?.comment || null })));
+  const saveInspection = (status: "draft" | "complete") => { save.mutate({ month: currentMonth, status, signatureData: signature, notes: notes || null, items: buildItems() }); };
+  useEffect(() => {
+    if (!isControl || !isDirty || !data?.equipment?.length) return;
+    const timer = window.setTimeout(() => { autoSave.mutate({ month: currentMonth, status: "draft", signatureData: signature, notes: notes || null, items: buildItems() }); setIsDirty(false); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [entries, signature, notes, isDirty, isControl, currentMonth, data?.equipment]);
+  const exportPdf = (inspection: NonNullable<typeof data>['current']) => {
+    if (!inspection) return;
+    if (inspection.status !== "complete" || !inspection.signatureData) { toast.error("Le rapport PDF est disponible uniquement après clôture et signature de l’inspecteur."); return; }
+    const doc = new jsPDF(); doc.setFillColor(34, 116, 71); doc.rect(0, 0, 210, 24, "F"); doc.setTextColor(255, 255, 255); doc.setFontSize(16); doc.text("Contrôle Cour · Notre-Dame de Basse-Wavre", 14, 15); doc.setTextColor(25, 53, 42); doc.setFontSize(12); doc.text(`Rapport mensuel — ${monthLabel(inspection.month)}`, 14, 36); doc.setFontSize(9); doc.setTextColor(95, 114, 103); doc.text("Document de suivi des équipements de la cour de récréation", 14, 43); let y = 57;
+    for (const item of data?.equipment || []) { const itemEntries = inspection.items.filter(row => row.equipmentId === item.id); const status = aggregateStatus(itemEntries.map(row => ({ status: row.status as Status, comment: row.comment || "" }))); doc.setTextColor(25, 53, 42); doc.setFontSize(11); doc.text(item.name, 14, y); doc.setFontSize(8); doc.setTextColor(100, 117, 106); doc.text(statusMeta(status).label, 155, y); y += 6; for (const row of itemEntries) { const comment = row.comment ? ` — ${row.comment}` : ""; doc.text(`• ${row.criterion}: ${row.status}${comment}`, 18, y); y += 5; } y += 4; if (y > 265) { doc.addPage(); y = 20; } }
+    if (inspection.notes) { doc.setFontSize(10); doc.setTextColor(25, 53, 42); doc.text("Observations générales", 14, y); y += 7; doc.setFontSize(9); doc.setTextColor(90, 105, 96); const lines = doc.splitTextToSize(inspection.notes, 180); doc.text(lines, 14, y); y += lines.length * 5 + 8; }
+    doc.setFontSize(10); doc.setTextColor(25, 53, 42); doc.text("Signature de l’inspecteur", 14, Math.min(y + 8, 270)); if (inspection.signatureData) doc.addImage(inspection.signatureData, "PNG", 14, Math.min(y + 12, 275), 70, 25); doc.setFontSize(8); doc.setTextColor(115, 130, 119); doc.text(`Généré le ${new Date().toLocaleDateString("fr-BE")}`, 150, 287); doc.save(`controle-cour-${inspection.month}.pdf`);
+  };
+
+  if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="animate-spin text-[#227447]" /></div>;
+  if (error) return <div className="flex min-h-[60vh] items-center justify-center"><Card className="max-w-md border-[#f2c8c1] text-center shadow-none"><CardContent className="p-8"><ShieldAlert className="mx-auto text-[#b44436]" size={30} /><h2 className="mt-4 font-serif text-2xl font-semibold">Impossible de charger les contrôles</h2><p className="mt-3 text-sm leading-6 text-[#718579]">La connexion à la base en ligne a rencontré un problème. Vos données déjà enregistrées ne sont pas supprimées.</p><Button onClick={() => refetch()} className="mt-6 rounded-xl bg-[#227447] text-white hover:bg-[#1b603a]">Réessayer</Button></CardContent></Card></div>;
+  const current = data?.current;
+
+  return <div>
+    <div className="mb-9 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#227447]"><Sparkles size={14} /> Suivi mensuel</p><h1 className="font-serif text-4xl font-semibold tracking-tight text-[#19352a] md:text-5xl">La cour, en toute confiance.</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-[#6b7d72]">Centralisez les vérifications de sécurité et gardez une trace claire de chaque mois écoulé.</p></div><Button onClick={() => setLocation("/controle")} className="h-11 rounded-xl bg-[#227447] px-5 text-white shadow-[0_10px_24px_rgba(34,116,71,0.18)] hover:bg-[#1b603a]"><ClipboardCheck size={17} className="mr-2" /> {current ? "Reprendre le contrôle" : "Commencer le contrôle" }<ArrowRight size={16} className="ml-2" /></Button></div>
+    {!isControl && !isHistory && <><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Card className="border-[#e1e9e3] shadow-none"><CardContent className="p-5"><div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-[#819388]">Mois en cours</p><div className="rounded-xl bg-[#e7f4e9] p-2 text-[#227447]"><Leaf size={17} /></div></div><p className="mt-4 font-serif text-2xl font-semibold capitalize">{monthLabel(currentMonth)}</p><p className="mt-1 text-xs text-[#819388]">{current?.status === "complete" ? "Contrôle clôturé" : "Contrôle à compléter"}</p></CardContent></Card><Card className="border-[#e1e9e3] shadow-none"><CardContent className="p-5"><div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-[#819388]">Équipements conformes</p><div className="rounded-xl bg-[#e7f4e9] p-2 text-[#227447]"><Check size={17} /></div></div><p className="mt-4 font-serif text-2xl font-semibold">{completedCount}<span className="ml-1 text-base font-sans text-[#9aab9f]">/ {data?.equipment.length || 0}</span></p><p className="mt-1 text-xs text-[#819388]">À l’issue des points complétés</p></CardContent></Card><Card className="border-[#e1e9e3] shadow-none"><CardContent className="p-5"><div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-[#819388]">Anomalies</p><div className="rounded-xl bg-[#fceae7] p-2 text-[#b44436]"><AlertTriangle size={17} /></div></div><p className="mt-4 font-serif text-2xl font-semibold text-[#b44436]">{anomalyCount}</p><p className="mt-1 text-xs text-[#819388]">Point(s) nécessitant une action</p></CardContent></Card><Card className="border-[#e1e9e3] shadow-none"><CardContent className="p-5"><div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-[#819388]">Historique</p><div className="rounded-xl bg-[#eef0f8] p-2 text-[#59688f]"><FileClock size={17} /></div></div><p className="mt-4 font-serif text-2xl font-semibold">{data?.history.length || 0}</p><p className="mt-1 text-xs text-[#819388]">Rapports sauvegardés</p></CardContent></Card></div>
+    <div className="mt-7 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-[#e1e9e3] shadow-none"><CardHeader className="flex-row items-center justify-between"><div><CardTitle className="font-serif text-2xl">État de la cour</CardTitle><p className="mt-1 text-sm text-[#819388]">Vue synthétique des équipements contrôlés</p></div><Button variant="ghost" className="text-[#227447]" onClick={() => setLocation("/controle")}>Détailler <ArrowRight size={15} className="ml-2" /></Button></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2">{(data?.equipment || []).map(item => <div key={item.id} className="flex items-center justify-between rounded-2xl border border-[#e8eee9] bg-[#fbfcfa] p-4"><div className="min-w-0"><p className="truncate text-sm font-semibold">{item.name}</p><p className="mt-1 text-xs text-[#87998d]">{item.category}</p></div><StatusPill status={(equipmentStatuses[item.id] || "pending") as Status | "pending"} /></div>)}</CardContent></Card><Card className="border-[#e1e9e3] bg-[#19352a] text-white shadow-none"><CardContent className="flex h-full flex-col justify-between p-7"><div><div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10"><ShieldCheck size={22} /></div><p className="font-serif text-2xl font-semibold">Un contrôle, cinq regards.</p><p className="mt-3 text-sm leading-6 text-[#c8d8cc]">Sécurité, fiabilité, stabilité, état général et propreté sont suivis pour chaque équipement.</p></div><div className="mt-8 flex items-center gap-2 text-xs text-[#bdd5c2]"><CheckCircle2 size={15} /> Données sauvegardées en ligne automatiquement</div></CardContent></Card></div>{user?.role === "admin" && <Card className="mt-6 border-[#e1e9e3] shadow-none"><CardHeader><div className="flex items-center gap-3"><div className="rounded-xl bg-[#eef0f8] p-2 text-[#59688f]"><Users size={18} /></div><div><CardTitle className="font-serif text-2xl">Accès du personnel</CardTitle><p className="mt-1 text-sm text-[#819388]">Approuvez uniquement les membres du personnel autorisés.</p></div></div></CardHeader><CardContent><div className="space-y-2">{(staffQuery.data || []).map(staff => <div key={staff.id} className="flex flex-col justify-between gap-3 rounded-xl border border-[#e8eee9] p-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold">{staff.name || "Personnel sans nom"}</p><p className="text-xs text-[#87998d]">{staff.email || "Adresse non renseignée"} · {staff.role === "admin" ? "Administrateur" : "Inspecteur"}</p></div><Button size="sm" variant="outline" disabled={staffMutation.isPending} onClick={() => staffMutation.mutate({ userId: staff.id, accessStatus: staff.accessStatus === "approved" ? "revoked" : "approved" })} className="rounded-xl border-[#cbdacc]">{staff.accessStatus === "approved" ? "Révoquer" : "Approuver"}</Button></div>)}{!staffQuery.data?.length && <p className="py-4 text-sm text-[#87998d]">Aucun compte à gérer.</p>}</div></CardContent></Card>}</>}
+    {isControl && <Card className="border-[#e1e9e3] shadow-none"><CardHeader className="border-b border-[#edf1ed] pb-6"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#227447]">Formulaire de contrôle</p><CardTitle className="mt-2 font-serif text-3xl capitalize">{monthLabel(currentMonth)}</CardTitle><p className="mt-2 text-sm text-[#819388]">Sélectionnez un statut pour chaque critère et ajoutez une précision si nécessaire.</p></div><div className="flex gap-2"><StatusPill status={anomalyCount ? "non conforme" : "à surveiller"} /><span className="rounded-full bg-[#f1f5f1] px-3 py-1.5 text-xs font-medium text-[#708276]">{Object.keys(entries).length} points saisis</span></div></div></CardHeader><CardContent className="space-y-7 pt-7">{(data?.equipment || []).map(item => <section key={item.id} className="rounded-2xl border border-[#e3ebe4] bg-[#fbfcfa] p-4 md:p-6"><div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-lg font-semibold">{item.name}</p><p className="mt-1 text-xs leading-5 text-[#819388]">{item.description}</p></div><StatusPill status={(equipmentStatuses[item.id] || "pending") as Status | "pending"} /></div><div className="space-y-4">{CRITERIA.map(criterion => { const entry = entries[keyFor(item.id, criterion)] || { status: "à surveiller" as Status, comment: "" }; return <div key={criterion} className="grid gap-3 border-t border-[#e8eee9] pt-4 md:grid-cols-[150px_1fr]"><div><p className="text-sm font-semibold capitalize">{criterion}</p><div className="mt-2 flex flex-wrap gap-1.5">{STATUSES.map(status => <button key={status} type="button" onClick={() => setEntry(item.id, criterion, { status })} className={cn("rounded-lg border px-2 py-1 text-[10px] font-semibold transition-colors", entry.status === status ? statusMeta(status).className : "border-[#e1e9e3] bg-white text-[#87998d] hover:border-[#b9cdbc]")}>{status}</button>)}</div></div><Textarea value={entry.comment} onChange={event => setEntry(item.id, criterion, { comment: event.target.value })} placeholder="Commentaire facultatif…" className="min-h-16 resize-none rounded-xl border-[#e1e9e3] bg-white text-sm" /></div>; })}</div></section>)}<div className="grid gap-6 rounded-2xl bg-[#f0f6f1] p-5 md:grid-cols-2 md:p-6"><div><div className="mb-3 flex items-center gap-2"><UserRound size={17} className="text-[#227447]" /><p className="font-semibold">Signature de l’inspecteur</p></div><p className="mb-3 text-xs leading-5 text-[#6f8275]">Obligatoire pour clôturer le rapport mensuel.</p><SignaturePad value={signature} onChange={value => { setIsDirty(true); setSignature(value); }} /></div><div><p className="mb-3 font-semibold">Observations générales</p><Textarea value={notes} onChange={event => { setIsDirty(true); setNotes(event.target.value); }} placeholder="Ajoutez une remarque générale sur la cour…" className="min-h-40 resize-none rounded-xl border-[#dbe8de] bg-white" /></div></div><div className="flex flex-col justify-between gap-3 border-t border-[#e8eee9] pt-5 sm:flex-row sm:items-center"><p className="text-xs text-[#819388]">Les données sont enregistrées dans la base en ligne du collège.</p><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => saveInspection("draft")} disabled={save.isPending} className="rounded-xl border-[#cbdacc]">Enregistrer le brouillon</Button><Button onClick={() => saveInspection("complete")} disabled={save.isPending || !signature} className="rounded-xl bg-[#227447] text-white hover:bg-[#1b603a]">{save.isPending ? <Loader2 className="mr-2 animate-spin" size={16} /> : <CheckCircle2 className="mr-2" size={16} />}Clôturer le contrôle</Button></div></div></CardContent></Card>}
+    {isHistory && <Card className="border-[#e1e9e3] shadow-none"><CardHeader><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-xs font-semibold uppercase tracking-wider text-[#227447]">Traçabilité</p><CardTitle className="mt-2 font-serif text-3xl">Historique mensuel</CardTitle><p className="mt-2 text-sm text-[#819388]">Retrouvez les rapports sauvegardés et téléchargez leur version PDF.</p></div><div className="flex flex-col gap-2 sm:flex-row"><input type="month" value={historyMonth} onChange={event => setHistoryMonth(event.target.value)} className="h-10 rounded-xl border border-[#dfe9e1] bg-white px-3 text-sm" aria-label="Filtrer par mois" /><select value={historyEquipment} onChange={event => setHistoryEquipment(event.target.value)} className="h-10 rounded-xl border border-[#dfe9e1] bg-white px-3 text-sm" aria-label="Filtrer par équipement"><option value="">Tous les équipements</option>{(data?.equipment || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div></div></CardHeader><CardContent><div className="space-y-3">{filteredHistory.map(row => <div key={row.id} className="flex flex-col justify-between gap-4 rounded-2xl border border-[#e5ece6] bg-[#fbfcfa] p-4 md:flex-row md:items-center"><div className="flex items-center gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e7f4e9] text-[#227447]"><FileClock size={19} /></div><div><p className="font-semibold capitalize">{monthLabel(row.month)}</p><p className="mt-1 text-xs text-[#87998d]">{row.items.length} points enregistrés · {row.status === "complete" ? "Rapport clôturé" : "Brouillon"}</p></div></div><div className="flex items-center gap-3"><StatusPill status={aggregateStatus(row.items.map(item => ({ status: item.status as Status, comment: item.comment || "" })))} /><Button variant="outline" size="sm" className="rounded-xl border-[#cbdacc]" disabled={row.status !== "complete" || !row.signatureData} onClick={() => exportPdf(row)} title={row.status !== "complete" || !row.signatureData ? "Disponible après clôture et signature" : "Télécharger le rapport PDF"}><Download size={15} className="mr-2" /> PDF</Button></div></div>)}{!filteredHistory.length && <div className="rounded-2xl border border-dashed border-[#cbdacc] p-10 text-center"><FileClock className="mx-auto text-[#9db1a2]" size={28} /><p className="mt-3 font-semibold">Aucun rapport sauvegardé</p><p className="mt-1 text-sm text-[#819388]">Le premier contrôle clôturé apparaîtra ici.</p></div>}</div></CardContent></Card>}
+  </div>;
 }

@@ -1,0 +1,2 @@
+ALTER TABLE `users` MODIFY COLUMN `role` enum('inspecteur','admin') NOT NULL DEFAULT 'inspecteur';--> statement-breakpoint
+ALTER TABLE `users` ADD `accessStatus` enum('pending','approved','revoked') DEFAULT 'pending' NOT NULL;
