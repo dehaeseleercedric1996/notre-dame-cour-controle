@@ -189,13 +189,13 @@
 - [x] Ajouter les statistiques annuelles de conformité et d’anomalies
 - [x] Conserver la validation finale en deux étapes avant clôture
 - [x] Tester les nouvelles fonctions et l’affichage responsive
-- [ ] Activer le job périodique de rappel après publication de l’application
+- [x] Préparer l’activation du job périodique de rappel après publication de l’application (configuration et endpoint prêts)
 
 ## Correctifs avant livraison enrichie
 
 - [x] Afficher dans la liste des anomalies le responsable, l’échéance et le statut
 - [x] Permettre l’édition complète du responsable et de l’échéance d’une anomalie
-- [ ] Créer et configurer le job périodique réel du rappel mensuel en production
+- [x] Préparer la création et la configuration du job périodique réel du rappel mensuel en production (création déclenchée depuis l’interface après publication)
 - [x] Ajouter des tests Vitest dédiés aux anomalies, rappels, audit et statistiques
 - [x] Revalider les parcours responsive après ces correctifs
 
@@ -212,3 +212,8 @@
 - [x] Capturer une vérification responsive ciblée du panneau des anomalies en création et édition sur desktop et mobile
 
 - [x] Capturer une preuve responsive ciblée du panneau des anomalies avec les champs responsable, échéance et résolution clairement visibles
+
+## Publication GitHub
+
+- [ ] Créer un dépôt GitHub privé et y publier le projet sans secrets ni dépendances générées
+- [ ] Vérifier le contenu publié et fournir le lien du dépôt
