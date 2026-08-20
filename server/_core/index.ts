@@ -7,6 +7,11 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { sdk } from "./sdk";
+import { getDb } from "../db";
+import { reminderSettings } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
+import { notifyOwner } from "./notification";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -28,6 +33,22 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+export async function monthlyReminderHandler(req: express.Request, res: express.Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
+    const db = await getDb();
+    if (!db) return res.json({ ok: true, skipped: "database-unavailable" });
+    const settings = (await db.select().from(reminderSettings).where(eq(reminderSettings.scheduleCronTaskUid, user.taskUid)).limit(1))[0];
+    if (!settings?.enabled) return res.json({ ok: true, skipped: "disabled" });
+    const month = new Date().toLocaleDateString("fr-BE", { month: "long", year: "numeric" });
+    const notified = await notifyOwner({ title: "Contrôle mensuel à effectuer", content: `Le contrôle de la cour pour ${month} doit être vérifié par le personnel autorisé.` });
+    return res.json({ ok: true, notified });
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error), timestamp: new Date().toISOString() });
+  }
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -36,6 +57,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.post("/api/scheduled/monthly-reminder", monthlyReminderHandler);
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -63,4 +86,4 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+if (process.env.NODE_ENV !== "test") startServer().catch(console.error);

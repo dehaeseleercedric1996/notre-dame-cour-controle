@@ -48,6 +48,45 @@ export const inspections = mysqlTable("inspections", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({ monthUnique: uniqueIndex("inspections_month_unique").on(table.month) }));
 
+export const findings = mysqlTable("findings", {
+  id: int("id").autoincrement().primaryKey(),
+  inspectionId: int("inspectionId").notNull(),
+  equipmentId: int("equipmentId").notNull(),
+  criterion: varchar("criterion", { length: 80 }).notNull(),
+  description: text("description").notNull(),
+  status: mysqlEnum("status", ["open", "in_progress", "resolved"]).default("open").notNull(),
+  responsibleId: int("responsibleId"),
+  dueDate: timestamp("dueDate"),
+  resolution: text("resolution"),
+  photoKey: varchar("photoKey", { length: 255 }),
+  photoUrl: text("photoUrl"),
+  createdBy: int("createdBy").notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const auditLog = mysqlTable("audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  entityType: varchar("entityType", { length: 40 }).notNull(),
+  entityId: int("entityId").notNull(),
+  action: varchar("action", { length: 40 }).notNull(),
+  actorId: int("actorId").notNull(),
+  signatureData: text("signatureData"),
+  details: text("details"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const reminderSettings = mysqlTable("reminder_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  enabled: int("enabled").default(1).notNull(),
+  dayOfMonth: int("dayOfMonth").default(1).notNull(),
+  hourUtc: int("hourUtc").default(8).notNull(),
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const inspectionItems = mysqlTable("inspection_items", {
   id: int("id").autoincrement().primaryKey(),
   inspectionId: int("inspectionId").notNull(),
@@ -64,6 +103,9 @@ export type CriterionRow = typeof criteria.$inferSelect;
 export type Equipment = typeof equipment.$inferSelect;
 export type Inspection = typeof inspections.$inferSelect;
 export type InspectionItem = typeof inspectionItems.$inferSelect;
+export type Finding = typeof findings.$inferSelect;
+export type AuditLog = typeof auditLog.$inferSelect;
+export type ReminderSettings = typeof reminderSettings.$inferSelect;
 
 export const CRITERIA = ["sécurité", "fiabilité", "stabilité", "état général", "propreté"] as const;
 export type Criterion = typeof CRITERIA[number];

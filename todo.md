@@ -162,3 +162,53 @@
 - [x] Ajouter le badge Modifié avec un code couleur dédié
 - [x] Vérifier que les badges disparaissent après la période de récence
 - [x] Tester les règles de récence et l’affichage responsive
+
+## Améliorations opérationnelles demandées
+
+- [x] Ajouter la prise et l’association de photos aux anomalies
+- [x] Ajouter un suivi d’anomalies avec statut, responsable et échéance
+- [x] Ajouter les actions correctives et leur clôture
+- [x] Ajouter les notifications ou rappels mensuels
+- [x] Ajouter l’historique détaillé des modifications par utilisateur et date
+- [x] Ajouter un filtre des critères récents
+- [x] Ajouter la fiche détaillée de chaque équipement
+- [x] Ajouter les statistiques annuelles de conformité et d’anomalies
+- [x] Ajouter une validation finale en deux étapes avant clôture
+- [x] Tester les nouvelles fonctions et l’affichage responsive
+
+## État de livraison des améliorations
+
+- [x] Ajouter la prise et l’association de photos aux anomalies
+- [x] Ajouter un suivi d’anomalies avec statut, responsable et échéance
+- [x] Ajouter les actions correctives et leur clôture
+- [x] Ajouter l’interface de configuration des rappels mensuels
+- [x] Ajouter l’endpoint sécurisé de rappel périodique
+- [x] Ajouter l’historique détaillé des modifications signées
+- [x] Ajouter un filtre des critères récents
+- [x] Ajouter la fiche détaillée de chaque équipement
+- [x] Ajouter les statistiques annuelles de conformité et d’anomalies
+- [x] Conserver la validation finale en deux étapes avant clôture
+- [x] Tester les nouvelles fonctions et l’affichage responsive
+- [ ] Activer le job périodique de rappel après publication de l’application
+
+## Correctifs avant livraison enrichie
+
+- [x] Afficher dans la liste des anomalies le responsable, l’échéance et le statut
+- [x] Permettre l’édition complète du responsable et de l’échéance d’une anomalie
+- [ ] Créer et configurer le job périodique réel du rappel mensuel en production
+- [x] Ajouter des tests Vitest dédiés aux anomalies, rappels, audit et statistiques
+- [x] Revalider les parcours responsive après ces correctifs
+
+## Derniers écarts à corriger avant checkpoint
+
+- [x] Remplacer la saisie d’ID responsable par une sélection de membres autorisés avec affichage du nom
+- [x] Permettre l’édition du responsable et de l’échéance pour tous les états pertinents d’une anomalie
+- [x] Ajouter des tests Vitest pour les mutations anomalies, la configuration Heartbeat et le callback mensuel
+- [x] Capturer une vérification responsive ciblée du panneau des anomalies en création et édition
+
+## Ajustements finaux issus de la revue
+
+- [x] Précharger la résolution existante lors de l’édition et permettre la mise à jour responsable/échéance d’une anomalie résolue sans ressaisie obligatoire
+- [x] Capturer une vérification responsive ciblée du panneau des anomalies en création et édition sur desktop et mobile
+
+- [x] Capturer une preuve responsive ciblée du panneau des anomalies avec les champs responsable, échéance et résolution clairement visibles

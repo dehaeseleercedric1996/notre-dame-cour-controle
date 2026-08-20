@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { CRITERIA, DEFAULT_EQUIPMENT, InsertUser, criteria, equipment, inspectionItems, inspections, users } from "../drizzle/schema";
+import { CRITERIA, DEFAULT_EQUIPMENT, InsertUser, auditLog, criteria, equipment, findings, inspectionItems, inspections, users } from "../drizzle/schema";
 import { attachEquipmentMetadata } from "../shared/inspection";
 import { ENV } from "./_core/env";
 
@@ -39,6 +39,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     updateSet.accessStatus = "approved";
   }
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+}
+
+export async function listApprovedUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.accessStatus, "approved")).orderBy(users.name, users.id);
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -102,6 +108,34 @@ export async function listInspections(month?: string) {
   const items = await db.select().from(inspectionItems).where(inArray(inspectionItems.inspectionId, ids));
   const equipmentRows = items.length ? await db.select().from(equipment).where(inArray(equipment.id, items.map(item => item.equipmentId))) : [];
   return rows.map(row => ({ ...row, items: attachEquipmentMetadata(items.filter(item => item.inspectionId === row.id), equipmentRows) }));
+}
+
+export async function listFindings(filters?: { status?: "open" | "in_progress" | "resolved"; year?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(findings).orderBy(desc(findings.createdAt));
+  return rows.filter(row => (!filters?.status || row.status === filters.status) && (!filters?.year || row.createdAt.getFullYear() === filters.year));
+}
+
+export async function listAuditLogs(entityType?: string, entityId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ log: auditLog, actorName: users.name, actorEmail: users.email }).from(auditLog).leftJoin(users, eq(auditLog.actorId, users.id)).orderBy(desc(auditLog.createdAt));
+  return rows.filter(row => (!entityType || row.log.entityType === entityType) && (!entityId || row.log.entityId === entityId));
+}
+
+export async function getAnnualStats(year: number) {
+  const db = await getDb();
+  if (!db) return { year, months: [], totals: { conforme: 0, aSurveiller: 0, nonConforme: 0, anomaliesOuvertes: 0, anomaliesResolues: 0 } };
+  const inspectionsRows = await db.select().from(inspections).where(sql`YEAR(${inspections.createdAt}) = ${year}`).orderBy(inspections.month);
+  const inspectionIds = inspectionsRows.map(row => row.id);
+  const itemRows = inspectionIds.length ? await db.select().from(inspectionItems).where(inArray(inspectionItems.inspectionId, inspectionIds)) : [];
+  const findingRows = await db.select().from(findings).where(sql`YEAR(${findings.createdAt}) = ${year}`);
+  const months = inspectionsRows.map(inspection => {
+    const items = itemRows.filter(item => item.inspectionId === inspection.id);
+    return { month: inspection.month, status: inspection.status, conforme: items.filter(item => item.status === "conforme").length, aSurveiller: items.filter(item => item.status === "à surveiller").length, nonConforme: items.filter(item => item.status === "non conforme").length };
+  });
+  return { year, months, totals: { conforme: itemRows.filter(item => item.status === "conforme").length, aSurveiller: itemRows.filter(item => item.status === "à surveiller").length, nonConforme: itemRows.filter(item => item.status === "non conforme").length, anomaliesOuvertes: findingRows.filter(row => row.status !== "resolved").length, anomaliesResolues: findingRows.filter(row => row.status === "resolved").length } };
 }
 
 export async function saveInspection(input: {
